@@ -10,7 +10,7 @@ Gem::Specification.new do |s|
   s.description = 'Smoggy local API'
   s.license = 'Apache 2.0'
   s.require_path = 'lib'
-  s.add_dependency 'miasma'
-  s.add_dependency 'mime-types'
+  s.add_development_dependency 'miasma'
+  s.add_runtime_dependency 'mime-types'
   s.files = Dir['lib/**/*'] + %w(miasma-local.gemspec README.md CHANGELOG.md LICENSE)
 end
