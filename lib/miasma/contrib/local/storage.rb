@@ -1,6 +1,7 @@
 require 'miasma'
 require 'fileutils'
 require 'tempfile'
+require 'mime-types'
 
 module Miasma
   module Models
@@ -67,7 +68,7 @@ module Miasma
         # @return [Array<Models::Storage::Bucket>]
         def bucket_all
           Dir.new(object_store_root).map do |item|
-            if(::File.directory?(item) && !item.start_with?('.'))
+            if(::File.directory?(::File.join(object_store_root, item)) && !item.start_with?('.'))
               Bucket.new(
                 self,
                 :id => ::File.basename(uri_unescape(item)),
@@ -111,8 +112,8 @@ module Miasma
                 bucket,
                 :id => ::File.join(bucket.name, item_name),
                 :name => item_name,
-                :updated => File.mtime(item),
-                :size => File.size(item)
+                :updated => ::File.mtime(item),
+                :size => ::File.size(item)
               ).valid_state
             end
           end.compact
@@ -125,12 +126,16 @@ module Miasma
         def file_save(file)
           if(file.dirty?)
             file.load_data(file.attributes)
-            if(file.attributes[:body].is_a?(IO))
+            if(file.attributes[:body].respond_to?(:readpartial))
               file.body.rewind
               tmp_file = Tempfile.new('miasma')
-              while(content = file.body.read(Storage::READ_BODY_CHUNK_SIZE))
-                tmp_file.write content
+              begin
+                while(content = file.body.read(Storage::READ_BODY_CHUNK_SIZE))
+                  tmp_file.write content
+                end
+              rescue EOFError
               end
+              tmp_file.flush
               tmp_file.close
               FileUtils.mv(tmp_file.path, full_path(file))
             end
@@ -160,10 +165,13 @@ module Miasma
         def file_reload(file)
           if(file.persisted?)
             new_info = Smash.new.tap do |data|
-              data[:updated] = File.mtime(full_path(file))
-              data[:size] = File.size(file_path(file))
-              data[:etag] = Digest::MD5.hexdigest(content)
-              data[:content_type] = MIME::Types.of(full_path(file))
+              data[:updated] = ::File.mtime(full_path(file))
+              data[:size] = ::File.size(full_path(file))
+              data[:etag] = Digest::MD5.hexdigest(::File.read(full_path(file))) # @todo Update for block building
+              mime = MIME::Types.of(full_path(file)).first
+              if(mime)
+                data[:content_type] = mime.content_type
+              end
             end
             file.load_data(file.attributes.deep_merge(new_info))
             file.valid_state
@@ -178,7 +186,8 @@ module Miasma
         # @todo where is this in swift?
         def file_url(file, timeout_secs)
           if(file.persisted?)
-            raise NotImplementedError
+            "file://#{full_path(file)}"
+            full_path(file)
           else
             raise Error::ModelPersistError.new "#{file} has not been saved!"
           end
@@ -191,10 +200,10 @@ module Miasma
         def file_body(file)
           if(file.persisted?)
             tmp_file = Tempfile.new('miasma')
+            tmp_path = tmp_file.path
             tmp_file.delete
-            FileUtils.cp(full_path(file), tmp_file.path)
-            tmp_file.open
-            tmp_file
+            FileUtils.cp(full_path(file), tmp_path)
+            ::File.open(tmp_path, 'rb')
           else
             StringIO.new('')
           end
@@ -217,12 +226,14 @@ module Miasma
         # @param file_or_bucket [File, Bucket]
         # @return [String]
         def full_path(file_or_bucket)
-          path = ''
-          if(file_or_bucket.respond_to?(:bucket))
-            path << '/' << bucket_path(file_or_bucket.bucket)
+          if(file_or_bucket.is_a?(Bucket))
+            bucket_path(file_or_bucket)
+          else
+            ::File.join(
+              bucket_path(file_or_bucket.bucket),
+              file_path(file_or_bucket)
+            )
           end
-          path << '/' << file_path(file_or_bucket)
-          path
         end
 
         # URL string escape
