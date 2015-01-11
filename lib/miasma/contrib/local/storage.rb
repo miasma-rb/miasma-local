@@ -203,7 +203,7 @@ module Miasma
             tmp_path = tmp_file.path
             tmp_file.delete
             FileUtils.cp(full_path(file), tmp_path)
-            ::File.open(tmp_path, 'rb')
+            File::Streamable.new(::File.open(tmp_path, 'rb'))
           else
             StringIO.new('')
           end
