@@ -216,9 +216,7 @@ module Miasma
 
         # @return [String] escaped file path
         def file_path(file)
-          file.name.split('/').map do |part|
-            uri_escape(part)
-          end.join('/')
+          uri_escape(file.name)
         end
 
         # Provide full path for object
