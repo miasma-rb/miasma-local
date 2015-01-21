@@ -1,3 +1,6 @@
+## v0.1.6
+* Always escape paths when dealing with local system
+
 ## v0.1.4
 * Use streamable helper for file body
 
