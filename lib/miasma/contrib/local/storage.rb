@@ -1,4 +1,5 @@
 require 'miasma'
+require 'miasma/contrib/local'
 require 'fileutils'
 require 'tempfile'
 require 'mime-types'
