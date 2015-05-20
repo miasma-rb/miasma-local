@@ -84,7 +84,7 @@ module Miasma
         # @param args [Hash] filter options
         # @return [Array<Models::Storage::File>]
         def file_filter(bucket, args)
-          Dir.glob(::File.join(full_path(bucket), uri_escape(args[:prefix]), '*')).map do |item|
+          Dir.glob(::File.join(full_path(bucket), "#{uri_escape(args[:prefix])}*")).map do |item|
             if(::File.file?(item) && !item.start_with?('.'))
               item_name = item.sub("#{full_path(bucket)}/", '')
               item_name = uri_unescape(item_name)
@@ -92,8 +92,8 @@ module Miasma
                 bucket,
                 :id => ::File.join(bucket.name, item_name),
                 :name => item_name,
-                :updated => File.mtime(item),
-                :size => File.size(item)
+                :updated => ::File.mtime(item),
+                :size => ::File.size(item)
               ).valid_state
             end
           end.compact
