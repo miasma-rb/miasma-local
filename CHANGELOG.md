@@ -1,3 +1,6 @@
+## v0.1.8
+* Fix prefix filtering on bucket files
+
 ## v0.1.6
 * Always escape paths when dealing with local system
 
