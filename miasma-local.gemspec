@@ -10,6 +10,7 @@ Gem::Specification.new do |s|
   s.description = 'Smoggy local API'
   s.license = 'Apache 2.0'
   s.require_path = 'lib'
+  s.add_runtime_dependency 'elecksee'
   s.add_development_dependency 'miasma', '>= 0.2.12'
   s.add_development_dependency 'pry'
   s.add_development_dependency 'minitest'
