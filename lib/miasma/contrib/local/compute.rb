@@ -38,7 +38,14 @@ module Miasma
           if(server.persisted?)
             raise "What do we do?"
           else
-
+            lxc = Lxc::Clone.new(
+              :original => server.image_id,
+              :new_name => server.name
+            ).clone!
+            lxc.start
+            server.load_data(
+              server_info(lxc)
+            ).valid_state
           end
         end
 
@@ -103,7 +110,7 @@ module Miasma
               image_id = [
                 sys_info.fetch('ID', 'unknown-system'),
                 sys_info.fetch('VERSION_ID', 'unknown-version')
-              ].join('_')
+              ].join('_').tr('.', '')
             else
               sys_info = Smash.new
               image_id = 'unknown'
