@@ -15,6 +15,7 @@ module Miasma
         def self.included(klass)
           klass.class_eval do
             attribute :object_store_root, String
+            attribute :container_root, String, :default => '/var/lib/lxc'
           end
         end
 
@@ -23,5 +24,6 @@ module Miasma
     end
   end
 
+  Models::Compute.autoload :Local, 'miasma/contrib/local/compute'
   Models::Storage.autoload :Local, 'miasma/contrib/local/storage'
 end
