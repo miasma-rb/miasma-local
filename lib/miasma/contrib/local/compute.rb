@@ -38,10 +38,21 @@ module Miasma
           if(server.persisted?)
             raise "What do we do?"
           else
-            lxc = Lxc::Clone.new(
-              :original => server.image_id,
-              :new_name => server.name
-            ).clone!
+            if(server.metadata && server.metadata[:ephemeral])
+              elxc = Lxc::Ephemeral.new(
+                :original => server.image_id,
+                :daemon => true,
+                :new_name => server.name
+              )
+              elxc.create!
+              elxc.start!(:detach)
+              lxc = elxc.lxc
+            else
+              lxc = Lxc::Clone.new(
+                :original => server.image_id,
+                :new_name => server.name
+              ).clone!
+            end
             lxc.start
             server.load_data(
               server_info(lxc)
