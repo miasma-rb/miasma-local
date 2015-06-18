@@ -1,6 +1,7 @@
 require 'miasma'
 require 'miasma/contrib/local'
 require 'elecksee'
+require 'tempfile'
 
 module Miasma
   module Models
@@ -54,6 +55,26 @@ module Miasma
               ).clone!
             end
             lxc.start
+            m_data = Smash.new(
+              :name => server.name,
+              :ephemeral => server.metadata[:ephemeral],
+              :image_id => server.image_id,
+              :flavor_id => server.flavor_id
+            )
+            m_data_path = lxc.path.join('miasma.json').to_s
+            if(File.writable?(File.dirname(m_data_path)))
+              File.open(m_data_path, 'w') do |file|
+                file.write MultiJson.dump(m_data)
+              end
+            else
+              t_file = Tempfile.new('miasma-local-compute')
+              t_file.write MultiJson.dump(m_data)
+              t_file.close
+              lxc.run_command(
+                "mv #{t_file.path} #{m_data_path}",
+                :sudo => true
+              )
+            end
             server.load_data(
               server_info(lxc)
             ).valid_state
@@ -67,7 +88,7 @@ module Miasma
         def server_reload(server)
           if(server.persisted?)
             lxc = Lxc.new(
-              server.name,
+              File.basename(server.id),
               :base_path => File.dirname(server.id)
             )
             server.load_data(
@@ -86,14 +107,16 @@ module Miasma
         def server_destroy(server)
           if(server.persisted?)
             lxc = Lxc.new(
-              server.name,
+              File.basename(server.id),
               :base_path => File.dirname(server.id)
             )
             if(lxc.exists?)
               if(lxc.running?)
                 lxc.stop
               end
-              lxc.destroy
+              if(lxc.exists?) # ephemeral self-clean
+                lxc.destroy
+              end
             end
             true
           else
@@ -109,30 +132,35 @@ module Miasma
         # @return [Smash]
         def server_info(lxc)
           if(lxc.exists?)
-            info_path = lxc.rootfs.join('etc/os-release').to_s
-            if(File.exists?(info_path))
-              sys_info = Smash[
-                File.read(info_path).split("\n").map do |line|
-                  line.split('=', 2).map do |item|
-                    item.gsub(/(^"|"$)/, '')
-                  end
-                end
-              ]
-              image_id = [
-                sys_info.fetch('ID', 'unknown-system'),
-                sys_info.fetch('VERSION_ID', 'unknown-version')
-              ].join('_').tr('.', '')
+            meta_path = lxc.path.join('miasma.json').to_s
+            if(File.exists?(meta_path))
+              sys_info = MultiJson.load(File.read(meta_path)).to_smash
             else
-              sys_info = Smash.new
-              image_id = 'unknown'
+              info_path = lxc.rootfs.join('etc/os-release').to_s
+              if(File.exists?(info_path))
+                sys_info = Smash[
+                  File.read(info_path).split("\n").map do |line|
+                    line.split('=', 2).map do |item|
+                      item.gsub(/(^"|"$)/, '')
+                    end
+                  end
+                ]
+                sys_info[:image_id] = [
+                  sys_info.fetch('ID', 'unknown-system'),
+                  sys_info.fetch('VERSION_ID', 'unknown-version')
+                ].join('_').tr('.', '')
+                sys_info[:name] = lxc.name
+              else
+                sys_info = Smash.new
+              end
             end
 
             Smash.new(
               :id => lxc.path.to_s,
-              :name => lxc.name,
+              :name => sys_info[:name],
               :state => lxc.state,
-              :image_id => image_id,
-              :flavor_id => 'unknown',
+              :image_id => sys_info.fetch(:image_id, 'unknown'),
+              :flavor_id => sys_info.fetch(:flavor_id, 'unknown'),
               :addresses_public =>  lxc.running? ? [
                 Server::Address.new(
                   :version => 4,
@@ -140,12 +168,17 @@ module Miasma
                 )
               ] : [],
               :addresses_private => [],
-              :status => lxc.state.to_s
+              :status => lxc.state.to_s,
+              :metadata => Smash.new(
+                :ephemeral => sys_info[:ephemeral]
+              )
             )
           else
             Smash.new(
               :id => lxc.path.to_s,
               :name => lxc.name,
+              :image_id => 'unknown',
+              :flavor_id => 'unknown',
               :state => :terminated,
               :addresses_public => [],
               :addresses_private => [],
